@@ -19,10 +19,7 @@ func (f *DependencyFilter) Name() string {
 }
 
 // Filter is exported
-func (f *DependencyFilter) Filter(config *cluster.ContainerConfig, nodes []*node.Node) ([]*node.Node, error) {
-	if len(nodes) == 0 {
-		return nodes, nil
-	}
+func (f *DependencyFilter) Match(config *cluster.ContainerConfig, node *node.Node) (bool, error) {
 	// Volumes
 	volumes := []string{}
 	for _, volume := range config.HostConfig.VolumesFrom {
@@ -41,20 +38,9 @@ func (f *DependencyFilter) Filter(config *cluster.ContainerConfig, nodes []*node
 		net = append(net, strings.TrimPrefix(config.HostConfig.NetworkMode, "container:"))
 	}
 
-	candidates := []*node.Node{}
-	for _, node := range nodes {
-		if f.check(volumes, node) &&
-			f.check(links, node) &&
-			f.check(net, node) {
-			candidates = append(candidates, node)
-		}
-	}
-
-	if len(candidates) == 0 {
-		return nil, fmt.Errorf("Unable to find a node fulfilling all dependencies: %s", f.String(config))
-	}
-
-	return candidates, nil
+	return f.check(volumes, node) &&
+		f.check(links, node) &&
+		f.check(net, node), nil
 }
 
 // Get a string representation of the dependencies found in the container config.
