@@ -28,11 +28,11 @@ var (
 
 func init() {
 	filters = []Filter{
-		&AffinityFilter{},
+		// &AffinityFilter{},
 		&HealthFilter{},
-		&ConstraintFilter{},
-		&PortFilter{},
-		&DependencyFilter{},
+		// &ConstraintFilter{},
+		// &PortFilter{},
+		// &DependencyFilter{},
 	}
 }
 
@@ -57,17 +57,28 @@ func New(names []string) ([]Filter, error) {
 	return selectedFilters, nil
 }
 
-// ApplyFilters applies a set of filters in batch.
+// ApplyFilters applies a set of filters in batch and performs the logical AND.
 func ApplyFilters(filters []Filter, config *cluster.ContainerConfig, nodes []*node.Node) ([]*node.Node, error) {
 	var err error
 
 	for _, filter := range filters {
-		nodes, err = filter.Filter(config, nodes)
+		nodes, err = ApplyFilter(filter, config, nodes)
 		if err != nil {
 			return nil, err
 		}
 	}
 	return nodes, nil
+}
+
+// ApplyFilter applies a single filter to a set of nodes
+func ApplyFilter(filter Filter, config *cluster.ContainerConfig, nodes []*node.Node) ([]*node.Node, error) {
+	candidates := []*node.Node{}
+	for _, node := range nodes {
+		if filter.Match(config, node) {
+			candidates = append(candidates, node)
+		}
+	}
+	return candidates, nil
 }
 
 // List returns the names of all the available filters
