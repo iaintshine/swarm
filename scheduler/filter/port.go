@@ -2,8 +2,6 @@
 package filter
 
 import (
-	"fmt"
-
 	"github.com/docker/swarm/cluster"
 	"github.com/docker/swarm/scheduler/node"
 	"github.com/samalba/dockerclient"
@@ -21,46 +19,37 @@ func (p *PortFilter) Name() string {
 }
 
 // Filter is exported
-func (p *PortFilter) Filter(config *cluster.ContainerConfig, nodes []*node.Node) ([]*node.Node, error) {
+func (p *PortFilter) Match(config *cluster.ContainerConfig, node *node.Node) (bool, error) {
 	if config.HostConfig.NetworkMode == "host" {
-		return p.filterHost(config, nodes)
+		return p.filterHost(config, node)
 	}
 
-	return p.filterBridge(config, nodes)
+	return p.filterBridge(config, node)
 }
 
-func (p *PortFilter) filterHost(config *cluster.ContainerConfig, nodes []*node.Node) ([]*node.Node, error) {
+// String is exported
+func (p *PortFilter) String(_ *cluster.ContainerConfig) string {
+	return ""
+}
+
+func (p *PortFilter) filterHost(config *cluster.ContainerConfig, node *node.Node) (bool, error) {
 	for port := range config.ExposedPorts {
-		candidates := []*node.Node{}
-		for _, node := range nodes {
-			if !p.portAlreadyExposed(node, port) {
-				candidates = append(candidates, node)
-			}
+		if p.portAlreadyExposed(node, port) {
+			return false, nil
 		}
-		if len(candidates) == 0 {
-			return nil, fmt.Errorf("unable to find a node with port %s available in the Host mode", port)
-		}
-		nodes = candidates
 	}
-	return nodes, nil
+	return true, nil
 }
 
-func (p *PortFilter) filterBridge(config *cluster.ContainerConfig, nodes []*node.Node) ([]*node.Node, error) {
+func (p *PortFilter) filterBridge(config *cluster.ContainerConfig, node *node.Node) (bool, error) {
 	for _, port := range config.HostConfig.PortBindings {
 		for _, binding := range port {
-			candidates := []*node.Node{}
-			for _, node := range nodes {
-				if !p.portAlreadyInUse(node, binding) {
-					candidates = append(candidates, node)
-				}
+			if !p.portAlreadyInUse(node, binding) {
+				return false, nil
 			}
-			if len(candidates) == 0 {
-				return nil, fmt.Errorf("unable to find a node with port %s available", binding.HostPort)
-			}
-			nodes = candidates
 		}
 	}
-	return nodes, nil
+	return true, nil
 }
 
 func (p *PortFilter) portAlreadyExposed(node *node.Node, requestedPort string) bool {
