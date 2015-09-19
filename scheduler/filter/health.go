@@ -22,17 +22,11 @@ func (f *HealthFilter) Name() string {
 }
 
 // Filter is exported
-func (f *HealthFilter) Filter(_ *cluster.ContainerConfig, nodes []*node.Node) ([]*node.Node, error) {
-	result := []*node.Node{}
-	for _, node := range nodes {
-		if node.IsHealthy {
-			result = append(result, node)
-		}
-	}
+func (f *HealthFilter) Match(_ *cluster.ContainerConfig, node *node.Node) bool {
+	return node.IsHealthy
+}
 
-	if len(result) == 0 {
-		return nil, ErrNoHealthyNodeAvailable
-	}
-
-	return result, nil
+// String is exported
+func (f *HealthFilter) String(_ *cluster.ContainerConfig) string {
+	return ""
 }
