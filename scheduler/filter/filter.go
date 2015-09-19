@@ -2,6 +2,8 @@ package filter
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/swarm/cluster"
@@ -29,11 +31,11 @@ var (
 
 func init() {
 	filters = []Filter{
-		// &AffinityFilter{},
+		&AffinityFilter{},
 		&HealthFilter{},
 		&ConstraintFilter{},
-		// &PortFilter{},
-		// &DependencyFilter{},
+		&PortFilter{},
+		&DependencyFilter{},
 	}
 }
 
@@ -68,6 +70,11 @@ func ApplyFilters(filters []Filter, config *cluster.ContainerConfig, nodes []*no
 			return nil, err
 		}
 	}
+
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("Unable to find a node that matches: %s", filtersView(filters, config))
+	}
+
 	return nodes, nil
 }
 
@@ -93,4 +100,16 @@ func List() []string {
 	}
 
 	return names
+}
+
+func filtersView(filters []Filter, config *cluster.ContainerConfig) string {
+	options := []string{}
+
+	for _, filter := range filters {
+		if o := filter.String(config); len(o) > 0 {
+			options = append(options, o)
+		}
+	}
+
+	return strings.Join(options, " ")
 }
