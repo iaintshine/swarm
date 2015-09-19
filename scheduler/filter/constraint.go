@@ -36,13 +36,13 @@ func (f *ConstraintFilter) Match(config *cluster.ContainerConfig, node *node.Nod
 		switch constraint.key {
 		case "node":
 			// "node" label is a special case pinning a container to a specific node.
-			match = constraint.Match(node.ID, node.Name) || constraint.isSoft
+			match = constraint.Match(node.ID, node.Name)
 		default:
-			match = constraint.Match(node.Labels[constraint.key]) || constraint.isSoft
+			match = constraint.Match(node.Labels[constraint.key])
 		}
 
 		// Since the filtering policy represent logical AND, we break up as soon as a first condition fails
-		if !match {
+		if !match && !constraint.isSoft {
 			break
 		}
 	}
@@ -60,7 +60,7 @@ func (f *ConstraintFilter) String(config *cluster.ContainerConfig) string {
 
 	expressions := make([]string, len(constraints))
 	for n, constraint := range constraints {
-		expressions[n] = fmt.Sprintf("-e %s%s%s", constraint.key, OPERATORS[constraint.operator], constraint.value)
+		expressions[n] = fmt.Sprintf("-e constraint:%s%s%s", constraint.key, OPERATORS[constraint.operator], constraint.value)
 	}
 	return strings.Join(expressions, " ")
 }
