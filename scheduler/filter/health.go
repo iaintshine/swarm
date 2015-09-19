@@ -21,9 +21,9 @@ func (f *HealthFilter) Name() string {
 	return "health"
 }
 
-// Filter is exported
-func (f *HealthFilter) Match(_ *cluster.ContainerConfig, node *node.Node) bool {
-	return node.IsHealthy
+// Match is exported
+func (f *HealthFilter) Match(_ *cluster.ContainerConfig, node *node.Node) (bool, error) {
+	return node.IsHealthy, nil
 }
 
 // String is exported

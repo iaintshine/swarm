@@ -36,6 +36,9 @@ func TestHealthyFilter(t *testing.T) {
 	}
 
 	for _, test := range cases {
-		assert.Equal(t, f.Match(&cluster.ContainerConfig{}, test.node), test.expected)
+		match, err := f.Match(&cluster.ContainerConfig{}, test.node)
+
+		assert.NoError(t, err)
+		assert.Equal(t, match, test.expected)
 	}
 }
