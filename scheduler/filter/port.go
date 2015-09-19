@@ -2,6 +2,9 @@
 package filter
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/docker/swarm/cluster"
 	"github.com/docker/swarm/scheduler/node"
 	"github.com/samalba/dockerclient"
@@ -28,8 +31,12 @@ func (p *PortFilter) Match(config *cluster.ContainerConfig, node *node.Node) (bo
 }
 
 // String is exported
-func (p *PortFilter) String(_ *cluster.ContainerConfig) string {
-	return ""
+func (p *PortFilter) String(config *cluster.ContainerConfig) string {
+	if config.HostConfig.NetworkMode == "host" {
+		return p.stringHost(config)
+	}
+
+	return p.stringBridge(config)
 }
 
 func (p *PortFilter) filterHost(config *cluster.ContainerConfig, node *node.Node) (bool, error) {
@@ -44,7 +51,7 @@ func (p *PortFilter) filterHost(config *cluster.ContainerConfig, node *node.Node
 func (p *PortFilter) filterBridge(config *cluster.ContainerConfig, node *node.Node) (bool, error) {
 	for _, port := range config.HostConfig.PortBindings {
 		for _, binding := range port {
-			if !p.portAlreadyInUse(node, binding) {
+			if p.portAlreadyInUse(node, binding) {
 				return false, nil
 			}
 		}
@@ -107,6 +114,32 @@ func (p *PortFilter) compare(requested dockerclient.PortBinding, bindings map[st
 		}
 	}
 	return false
+}
+
+func (p *PortFilter) stringHost(config *cluster.ContainerConfig) string {
+	if len(config.ExposedPorts) == 0 {
+		return ""
+	}
+
+	options := []string{}
+	for port := range config.ExposedPorts {
+		options = append(options, "--expose="+port)
+	}
+	return "--net=host " + strings.Join(options, " ")
+}
+
+func (p *PortFilter) stringBridge(config *cluster.ContainerConfig) string {
+	if len(config.HostConfig.PortBindings) == 0 {
+		return ""
+	}
+
+	options := []string{}
+	for _, port := range config.HostConfig.PortBindings {
+		for _, binding := range port {
+			options = append(options, fmt.Sprintf("-p %s:%s", port, binding.HostPort))
+		}
+	}
+	return strings.Join(options, " ")
 }
 
 func bindsAllInterfaces(binding dockerclient.PortBinding) bool {
