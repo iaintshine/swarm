@@ -14,7 +14,8 @@ type Filter interface {
 	Name() string
 
 	// Returns true if node was accepted by the filtering policy.
-	Match(*cluster.ContainerConfig, *node.Node) bool
+	// Might return error e.g. in case of expression parsing error.
+	Match(*cluster.ContainerConfig, *node.Node) (bool, error)
 
 	// Returns a cli representation of the config, or an empty string.
 	String(*cluster.ContainerConfig) string
@@ -74,7 +75,9 @@ func ApplyFilters(filters []Filter, config *cluster.ContainerConfig, nodes []*no
 func ApplyFilter(filter Filter, config *cluster.ContainerConfig, nodes []*node.Node) ([]*node.Node, error) {
 	candidates := []*node.Node{}
 	for _, node := range nodes {
-		if filter.Match(config, node) {
+		if ok, err := filter.Match(config, node); err != nil {
+			return nil, err
+		} else if ok {
 			candidates = append(candidates, node)
 		}
 	}
