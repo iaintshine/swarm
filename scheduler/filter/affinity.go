@@ -1,4 +1,3 @@
-// +build ignore
 package filter
 
 import (
@@ -20,56 +19,64 @@ func (f *AffinityFilter) Name() string {
 }
 
 // Filter is exported
-func (f *AffinityFilter) Filter(config *cluster.ContainerConfig, nodes []*node.Node) ([]*node.Node, error) {
+func (f *AffinityFilter) Match(config *cluster.ContainerConfig, node *node.Node) (bool, error) {
+	// TODO: Consider how parsing expressions can be done only once
+	//			for the whole batch of nodes, instead of compiling for every single call
 	affinities, err := parseExprs(config.Affinities())
 	if err != nil {
-		return nil, err
+		return false, err
 	}
 
+	match := true
+
+	// TODO: Add support for other logical operations.
 	for _, affinity := range affinities {
 		log.Debugf("matching affinity: %s%s%s", affinity.key, OPERATORS[affinity.operator], affinity.value)
 
-		candidates := []*node.Node{}
-		for _, node := range nodes {
-			switch affinity.key {
-			case "container":
-				containers := []string{}
-				for _, container := range node.Containers {
-					containers = append(containers, container.Id, strings.TrimPrefix(container.Names[0], "/"))
+		switch affinity.key {
+		case "container":
+			containers := []string{}
+			for _, container := range node.Containers {
+				containers = append(containers, container.Id, strings.TrimPrefix(container.Names[0], "/"))
+			}
+			match = affinity.Match(containers...)
+		case "image":
+			images := []string{}
+			for _, image := range node.Images {
+				images = append(images, image.Id)
+				images = append(images, image.RepoTags...)
+				for _, tag := range image.RepoTags {
+					images = append(images, strings.Split(tag, ":")[0])
 				}
-				if affinity.Match(containers...) {
-					candidates = append(candidates, node)
-				}
-			case "image":
-				images := []string{}
-				for _, image := range node.Images {
-					images = append(images, image.Id)
-					images = append(images, image.RepoTags...)
-					for _, tag := range image.RepoTags {
-						images = append(images, strings.Split(tag, ":")[0])
-					}
-				}
-				if affinity.Match(images...) {
-					candidates = append(candidates, node)
-				}
-			default:
-				labels := []string{}
-				for _, container := range node.Containers {
-					labels = append(labels, container.Labels[affinity.key])
-				}
-				if affinity.Match(labels...) {
-					candidates = append(candidates, node)
-				}
+			}
+			match = affinity.Match(images...)
+		default:
+			labels := []string{}
+			for _, container := range node.Containers {
+				labels = append(labels, container.Labels[affinity.key])
+			}
+			match = affinity.Match(labels...)
+		}
 
-			}
+		// Since the filtering policy represent logical AND, we break up as soon as a first condition fails
+		if !match && !affinity.isSoft {
+			break
 		}
-		if len(candidates) == 0 {
-			if affinity.isSoft {
-				return nodes, nil
-			}
-			return nil, fmt.Errorf("unable to find a node that satisfies %s%s%s", affinity.key, OPERATORS[affinity.operator], affinity.value)
-		}
-		nodes = candidates
 	}
-	return nodes, nil
+	return match, nil
+}
+
+// String is exported
+func (f *AffinityFilter) String(config *cluster.ContainerConfig) string {
+	affinities, err := parseExprs(config.Affinities())
+	if err != nil {
+		log.Errorf("unable to parse affinity expression due to %v", err)
+		return ""
+	}
+
+	expressions := make([]string, len(affinities))
+	for n, affinity := range affinities {
+		expressions[n] = fmt.Sprintf("-e affinity:%s%s%s", affinity.key, OPERATORS[affinity.operator], affinity.value)
+	}
+	return strings.Join(expressions, " ")
 }

@@ -31,7 +31,7 @@ func init() {
 	filters = []Filter{
 		// &AffinityFilter{},
 		&HealthFilter{},
-		// &ConstraintFilter{},
+		&ConstraintFilter{},
 		// &PortFilter{},
 		// &DependencyFilter{},
 	}
