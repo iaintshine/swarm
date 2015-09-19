@@ -10,10 +10,14 @@ import (
 
 // Filter is exported
 type Filter interface {
+	// Returns a name of the filtering policy.
 	Name() string
 
-	// Return a subset of nodes that were accepted by the filtering policy.
-	Filter(*cluster.ContainerConfig, []*node.Node) ([]*node.Node, error)
+	// Returns true if node was accepted by the filtering policy.
+	Match(*cluster.ContainerConfig, *node.Node) bool
+
+	// Returns a cli representation of the config, or an empty string.
+	String(*cluster.ContainerConfig) string
 }
 
 var (
