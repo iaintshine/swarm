@@ -1,8 +1,8 @@
-// +build ignore
 package filter
 
 import (
 	"fmt"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/swarm/cluster"
@@ -18,37 +18,49 @@ func (f *ConstraintFilter) Name() string {
 	return "constraint"
 }
 
-// Filter is exported
-func (f *ConstraintFilter) Filter(config *cluster.ContainerConfig, nodes []*node.Node) ([]*node.Node, error) {
+// Match is exported
+func (f *ConstraintFilter) Match(config *cluster.ContainerConfig, node *node.Node) (bool, error) {
+	// TODO: Consider how parsing expressions can be done only once
+	//			for the whole batch of nodes, instead of compiling for every single call
 	constraints, err := parseExprs(config.Constraints())
 	if err != nil {
-		return nil, err
+		return false, err
 	}
 
+	match := true
+
+	// TODO: Add support for other logical operations.
 	for _, constraint := range constraints {
 		log.Debugf("matching constraint: %s %s %s", constraint.key, OPERATORS[constraint.operator], constraint.value)
 
-		candidates := []*node.Node{}
-		for _, node := range nodes {
-			switch constraint.key {
-			case "node":
-				// "node" label is a special case pinning a container to a specific node.
-				if constraint.Match(node.ID, node.Name) {
-					candidates = append(candidates, node)
-				}
-			default:
-				if constraint.Match(node.Labels[constraint.key]) {
-					candidates = append(candidates, node)
-				}
-			}
+		switch constraint.key {
+		case "node":
+			// "node" label is a special case pinning a container to a specific node.
+			match = constraint.Match(node.ID, node.Name) || constraint.isSoft
+		default:
+			match = constraint.Match(node.Labels[constraint.key]) || constraint.isSoft
 		}
-		if len(candidates) == 0 {
-			if constraint.isSoft {
-				return nodes, nil
-			}
-			return nil, fmt.Errorf("unable to find a node that satisfies %s%s%s", constraint.key, OPERATORS[constraint.operator], constraint.value)
+
+		// Since the filtering policy represent logical AND, we break up as soon as a first condition fails
+		if !match {
+			break
 		}
-		nodes = candidates
 	}
-	return nodes, nil
+
+	return match, nil
+}
+
+// String is exported
+func (f *ConstraintFilter) String(config *cluster.ContainerConfig) string {
+	constraints, err := parseExprs(config.Constraints())
+	if err != nil {
+		log.Errorf("unable to parse constraint expression due to %v", err)
+		return ""
+	}
+
+	expressions := make([]string, len(constraints))
+	for n, constraint := range constraints {
+		expressions[n] = fmt.Sprintf("-e %s%s%s", constraint.key, OPERATORS[constraint.operator], constraint.value)
+	}
+	return strings.Join(expressions, " ")
 }
